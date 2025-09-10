@@ -43,7 +43,7 @@ This final version integrates best practices for database management, transactio
 
 ## Technology Stack
 - **Backend:** Java, Spring Boot
-- **Database:** MySQL / SQL Server
+- **Database:** PostgreSQL 
 - **Build Tool:** Maven
 - **Email Service:** Spring Email
 - **Version Control:** Git & GitHub
