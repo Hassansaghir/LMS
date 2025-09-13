@@ -34,11 +34,12 @@ public class SecurityConfig {
         ModelMapper mapper = new ModelMapper();
         mapper.getConfiguration().setSkipNullEnabled(true);
 
-        // Explicitly skip id, book, and borrower to avoid conflicts
+        // Explicitly skip id
         mapper.typeMap(BorrowingTransactionDTO.class, BorrowingTransaction.class)
                 .addMappings(m -> {
                     m.skip(BorrowingTransaction::setId);
                 });
+
 
         return mapper;
     }

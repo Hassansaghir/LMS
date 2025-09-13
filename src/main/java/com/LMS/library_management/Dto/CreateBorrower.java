@@ -12,6 +12,7 @@ public class CreateBorrower {
     @Email(message = "Email should be valid")
     private String email;
 
+    private String cardNumber;
 
     private String phoneNumber;
 }

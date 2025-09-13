@@ -9,9 +9,7 @@ import java.util.List;
 
 @Data
 public class AuthorDTO {
-    @NotBlank(message = "Author name is required")
     private String name;
-    @NotNull
     private String biography;
 
 

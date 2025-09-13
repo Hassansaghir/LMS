@@ -1,10 +1,16 @@
 package com.LMS.library_management.Service;
 import com.LMS.library_management.Dto.EmailRequest;
+import com.LMS.library_management.Dto.Type;
+import jakarta.transaction.Transactional;
 import lombok.Data;
+import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import com.LMS.library_management.Dto.BorrowingTransactionDTO;
+import com.LMS.library_management.Dto.TransactionResponse;
 import com.LMS.library_management.Models.Book;
+import com.LMS.library_management.Service.BorrowingTransactionService;
+import com.LMS.library_management.Dto.CreateTransactionRequest;
 import com.LMS.library_management.Models.Borrower;
 import com.LMS.library_management.Models.BorrowingTransaction;
 import com.LMS.library_management.Models.BorrowingStatus;
@@ -18,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +35,7 @@ import java.util.UUID;
 public class BorrowingTransactionService {
 
     private final ModelMapper modelMapper;
+    private final CmsClient cmsClient;
     private final BorrowingTransactionRepository transactionRepository;
     private final BookRepository bookRepository;
     private final BorrowerRepository borrowerRepository;
@@ -36,8 +44,8 @@ public class BorrowingTransactionService {
     private int transactionLimit;
     private final EmailServiceClient emailServiceClient; // Feign client injected
 
+    @Transactional
     public BorrowingTransaction borrowBook(BorrowingTransactionDTO dto) {
-
         // Check transaction limit
         int currentTransactionCount = transactionRepository.countActiveByBorrowerId(dto.getBorrower_id());
         if (currentTransactionCount >= transactionLimit) {
@@ -45,7 +53,7 @@ public class BorrowingTransactionService {
                     "Borrower has reached the maximum allowed borrow transactions: " + transactionLimit);
         }
 
-        // Fetch Book and Borrower entities
+        // Fetch Book
         Book book = bookRepository.findByIsbn(dto.getBook_isbn())
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found with isbn " + dto.getBook_isbn()));
 
@@ -53,49 +61,132 @@ public class BorrowingTransactionService {
             throw new BadRequestException("Book with isbn " + dto.getBook_isbn() + " is currently unavailable");
         }
 
-        Borrower borrower = borrowerRepository.findById(dto.getBorrower_id())
-                .orElseThrow(() -> new ResourceNotFoundException("Borrower not found with id " + dto.getBook_isbn()));
+        BigDecimal bookPrice = book.getPrice();
 
-        // Map DTO to entity, skipping id, book, and borrower
+        // Fetch Borrower
+        Borrower borrower = borrowerRepository.findById(dto.getBorrower_id())
+                .orElseThrow(() -> new ResourceNotFoundException("Borrower not found with id " + dto.getBorrower_id()));
+
+        if (borrower.getCardNumber() == null || borrower.getCardNumber().isEmpty()) {
+            throw new BadRequestException("Borrower does not have a card number assigned");
+        }
+
+        // Call cms
+        long borrowedDays = ChronoUnit.DAYS.between(dto.getBorrowDate(), dto.getReturnDate()); // e.g., 10 days
+        BigDecimal basePrice = book.getPrice();
+        BigDecimal insuranceFees = book.getInsurance_fees();
+        BigDecimal extraDayPrice = book.getExtra_days_rental_price();
+
+        long extraDays = Math.max(0, borrowedDays - 7); // only days beyond 1 week
+        BigDecimal totalExtra = extraDayPrice.multiply(BigDecimal.valueOf(extraDays));
+
+        BigDecimal totalAmount = basePrice.add(totalExtra).add(insuranceFees);
+
+        CreateTransactionRequest cmsRequest = new CreateTransactionRequest();
+        cmsRequest.setTransactionAmount(totalAmount);
+        cmsRequest.setTransactionType(Type.D);
+        cmsRequest.setCardNumber(borrower.getCardNumber());
+        TransactionResponse cmsResponse;
+        try {
+            cmsResponse = cmsClient.createTransaction(borrower.getCardNumber(), cmsRequest);
+            logger.info("CMS transaction created with ID {}", cmsResponse.getId());
+        } catch (Exception e) {
+            throw new BadRequestException("Transaction failed: " + e.getMessage());
+        }
+        // Map DTO to BorrowingTransaction entity
         BorrowingTransaction transaction = modelMapper.map(dto, BorrowingTransaction.class);
-        transaction.setBook(book);           // manually assign entity
-        transaction.setBorrower(borrower);   // manually assign entity
+        transaction.setBook(book);
+        transaction.setBorrower(borrower);
         transaction.setStatus(BorrowingStatus.BORROWED);
+        transaction.setBook_Price(totalAmount);
 
         // Mark book as unavailable
         book.setAvailable(false);
         bookRepository.save(book);
 
-        BorrowingTransaction savedTransaction = transactionRepository.save(transaction);
+        // Save BorrowingTransaction
+        BorrowingTransaction savedTransaction = transactionRepository.saveAndFlush(transaction);
 
-        // Send email notification
-        String message = "Book \"" + book.getTitle() + "\" borrowed successfully.";
-        EmailRequest emailRequest = new EmailRequest(borrower.getEmail(), message);
-        emailServiceClient.sendEmail(emailRequest);
+        // commit happens here if method ends successfully
+        transactionRepository.flush();
+
+        String message = "Dear " + borrower.getName() +
+                ", Book \"" + book.getTitle() + "\" borrowed successfully. " +
+                "Total charged = " + totalAmount + "$. " +
+                "Your new account balance = " + cmsResponse.getBalance() + "$. " +
+                "The base price is : "+basePrice+" $, " +
+                "the insurance fees is:"+insuranceFees+" $, " +
+                "the days that you borrowed: "+borrowedDays+" $, " +
+                "in each day we have fees: " +extraDayPrice+" $.";
+        try {
+            emailServiceClient.sendEmail(new EmailRequest(borrower.getEmail(), message));
+        } catch (Exception ex) {
+            logger.error("Email sending failed, but transaction committed", ex);
+        }
+
 
         return savedTransaction;
     }
 
 
+
+    @Transactional
     public BorrowingTransaction returnBook(UUID transactionId) {
+        // 1️⃣ Fetch transaction
         BorrowingTransaction transaction = transactionRepository.findById(transactionId);
 
+        // 2️⃣ Check if already returned
         if (transaction.getStatus() == BorrowingStatus.RETURNED) {
             throw new BadRequestException("Book has already been returned for transaction id " + transactionId);
         }
 
+        // 3️⃣ Set return date and status
         transaction.setReturnDate(LocalDate.now());
         transaction.setStatus(BorrowingStatus.RETURNED);
 
-        // Mark book as available
+        // 4️⃣ Mark book as available
         Book book = transaction.getBook();
         book.setAvailable(true);
         bookRepository.save(book);
 
-        BorrowingTransaction updated = transactionRepository.save(transaction);
-        logger.info("Book id {} returned for transaction id {}", book.getId(), transactionId);
-        return updated;
+        // 5️⃣ Refund insurance fee if returned on or before due date
+        BigDecimal refundedAmount = BigDecimal.ZERO;
+        boolean refunded = false;
+
+        if (!transaction.getReturnDate().isAfter(transaction.getReturnDate())) { // On or before due date
+            BigDecimal insuranceFee = book.getInsurance_fees();
+            refundedAmount = insuranceFee;
+
+            CreateTransactionRequest cmsRequest = new CreateTransactionRequest();
+            cmsRequest.setTransactionAmount(insuranceFee);
+            cmsRequest.setTransactionType(Type.C); // Credit
+            cmsRequest.setCardNumber(transaction.getBorrower().getCardNumber());
+
+            try {
+                cmsClient.createTransaction(transaction.getBorrower().getCardNumber(), cmsRequest);
+                refunded = true;
+                logger.info("Refunded insurance fee {} for transaction {}", insuranceFee, transactionId);
+            } catch (Exception e) {
+                logger.error("Failed to refund insurance fee for transaction {}: {}", transactionId, e.getMessage());
+            }
+        }
+
+        // 6️⃣ Save updated transaction
+        BorrowingTransaction updatedTransaction = transactionRepository.save(transaction);
+
+        // 7️⃣ Send email notification
+        String message = "Dear " + transaction.getBorrower().getName() +
+                ", Book \"" + book.getTitle() + "\" returned successfully. " +
+                "Insurance fee refunded: " + (refunded ? refundedAmount : BigDecimal.ZERO) + " $";
+        try {
+            emailServiceClient.sendEmail(new EmailRequest(transaction.getBorrower().getEmail(), message));
+        } catch (Exception ex) {
+            logger.error("Email sending failed for transaction {}: {}", transactionId, ex.getMessage());
+        }
+
+        return updatedTransaction;
     }
+
 
     public BorrowingTransaction getTransactionById(UUID id) {
         return transactionRepository.findById(id);

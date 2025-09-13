@@ -1,6 +1,7 @@
 package com.LMS.library_management.Controller;
 
 import com.LMS.library_management.Dto.BorrowingTransactionDTO;
+import com.LMS.library_management.Dto.TransactionReturn;
 import com.LMS.library_management.Models.Book;
 import com.LMS.library_management.Models.BorrowingTransaction;
 import com.LMS.library_management.Repository.BookRepository;
@@ -33,11 +34,12 @@ public class BorrowingTransactionController {
 
 
     @PostMapping("/borrow")
-    public ResponseEntity<BorrowingTransactionDTO> borrowBook(@Valid @RequestBody BorrowingTransactionDTO dto) {
+    public ResponseEntity<TransactionReturn> borrowBook(@Valid @RequestBody BorrowingTransactionDTO dto) {
         BorrowingTransaction transaction = transactionService.borrowBook(dto);
-        BorrowingTransactionDTO borrowingTransactionDTO=Modelmapper.map(transaction, BorrowingTransactionDTO.class);
+        TransactionReturn borrowingTransactionDTO=Modelmapper.map(transaction, TransactionReturn.class);
         borrowingTransactionDTO.setBorrower_id(transaction.getBorrower().getId());
         borrowingTransactionDTO.setBook_isbn(transaction.getBook().getIsbn());
+
         logger.info("Book borrowed with transaction id {}", transaction.getId());
         return ResponseEntity.ok(borrowingTransactionDTO);
     }

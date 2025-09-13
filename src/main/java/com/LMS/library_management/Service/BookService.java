@@ -1,12 +1,9 @@
 // service/BookService.java
 package com.LMS.library_management.Service;
-import com.LMS.library_management.Dto.AuthorDTO;
-import com.LMS.library_management.Dto.BookResponse;
-import com.LMS.library_management.Dto.UpdateBook;
+import com.LMS.library_management.Dto.*;
 import com.LMS.library_management.Repository.BorrowingTransactionRepository;
 import jakarta.transaction.Transactional;
 import org.modelmapper.ModelMapper;
-import com.LMS.library_management.Dto.BookDTO;
 import com.LMS.library_management.Models.Author;
 import com.LMS.library_management.Models.Book;
 import com.LMS.library_management.Models.Category;
@@ -40,7 +37,7 @@ public class BookService {
     }
 
 
-    public BookResponse createBook(BookDTO dto) {
+    public BookResponse createBook(CreateBook dto) {
         OpenLibraryClient.AuthorData authorData = openLibraryClient.fetchAuthorByIsbn(dto.getIsbn());
         Author author;
 
@@ -65,9 +62,7 @@ public class BookService {
         // Map DTO → Entity
         Book book = modelMapper.map(dto, Book.class);
         book.setAuthor(author);
-
         Book savedBook = bookRepository.save(book);
-
         // Build response
         BookResponse.BookInfo info = new BookResponse.BookInfo();
         info.setTitle(savedBook.getTitle());
@@ -80,7 +75,7 @@ public class BookService {
 
         BookResponse response = new BookResponse();
         response.setBooks(Map.of("ISBN:" + savedBook.getIsbn(), info));
-        
+
         return response;
     }
 

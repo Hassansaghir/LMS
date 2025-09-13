@@ -20,4 +20,5 @@ public class Borrower {
     private String email;
     @Column(nullable = false)
     private String phoneNumber;
+    private String cardNumber;
 }

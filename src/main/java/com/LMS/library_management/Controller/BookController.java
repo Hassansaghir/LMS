@@ -2,6 +2,7 @@ package com.LMS.library_management.Controller;
 
 import com.LMS.library_management.Dto.BookDTO;
 import com.LMS.library_management.Dto.BookResponse;
+import com.LMS.library_management.Dto.CreateBook;
 import com.LMS.library_management.Dto.UpdateBook;
 import com.LMS.library_management.Models.Book;
 import com.LMS.library_management.Service.BookService;
@@ -29,7 +30,7 @@ public class BookController {
     private  ModelMapper modelMapper;
 
     @PostMapping
-    public ResponseEntity<BookResponse> createBook(@RequestBody BookDTO dto) {
+    public ResponseEntity<BookResponse> createBook(@RequestBody CreateBook dto) {
         BookResponse response = bookService.createBook(dto);
         return ResponseEntity.ok(response);
     }
@@ -53,7 +54,11 @@ public class BookController {
     @GetMapping
     public ResponseEntity<List<BookDTO>> getAllBooks() {
         List<Book> books = bookService.getAllBooks();
-        return ResponseEntity.ok(maplist.mapList(books,BookDTO.class));
+        List<BookDTO> bookDTO=maplist.mapList(books, BookDTO.class);
+        for (int i=0;i<books.size();i++){
+            bookDTO.get(i).setAuthurName(books.get(i).getAuthor().getName());
+        }
+        return ResponseEntity.ok(bookDTO);
     }
 
     @DeleteMapping("/{isbn}")

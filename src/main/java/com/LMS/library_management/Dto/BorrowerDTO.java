@@ -19,6 +19,7 @@ public class BorrowerDTO {
 
     private String email;
 
+    private String cardNumber;
 
     private String phoneNumber;
 

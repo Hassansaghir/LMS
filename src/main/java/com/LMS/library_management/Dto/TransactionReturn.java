@@ -1,16 +1,12 @@
-// dto/BorrowingTransactionDTO.java
 package com.LMS.library_management.Dto;
 
-import com.LMS.library_management.Models.BorrowingStatus;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
-
 @Data
-public class BorrowingTransactionDTO {
+public class TransactionReturn {
     private String book_isbn;
 
     private UUID borrower_id;
@@ -19,4 +15,5 @@ public class BorrowingTransactionDTO {
 
     private LocalDate returnDate;
 
+    private BigDecimal bookPrice;
 }

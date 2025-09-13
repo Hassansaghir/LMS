@@ -1,17 +1,11 @@
 package com.LMS.library_management.Dto;
 
-import com.LMS.library_management.Models.Author;
 import com.LMS.library_management.Models.Category;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.util.List;
-
 @Data
-public class BookDTO {
-
+public class CreateBook {
     private String title;
 
     private String isbn;
@@ -25,5 +19,5 @@ public class BookDTO {
     private double extra_days_rental_price;
 
     private double insurance_fees;
-    private String AuthurName;
+
 }

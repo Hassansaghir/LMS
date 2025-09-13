@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -31,6 +32,8 @@ public class BorrowingTransaction {
     private LocalDate borrowDate;
 
     private LocalDate returnDate;
+
+    private BigDecimal book_Price;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
