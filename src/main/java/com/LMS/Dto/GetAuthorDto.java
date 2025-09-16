@@ -15,5 +15,4 @@ public class GetAuthorDto {
     private String name;
     @NotNull
     private String biography;
-    List<BookDTO> books;
 }

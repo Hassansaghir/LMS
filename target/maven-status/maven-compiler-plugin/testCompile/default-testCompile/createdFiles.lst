@@ -1,1 +1,2 @@
-com\LMS\library_management\LibraryManagementApplicationTests.class
+com\LMS\LibraryManagementApplicationTests.class
+com\LMS\Service\AuthorServiceTest.class
