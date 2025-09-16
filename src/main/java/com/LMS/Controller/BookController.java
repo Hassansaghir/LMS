@@ -19,7 +19,7 @@ import java.util.UUID;
 
 
 @RestController
-@RequestMapping("/api/books")
+@RequestMapping("/api/v1/books")
 @RequiredArgsConstructor
 public class BookController {
 
